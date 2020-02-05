@@ -34,7 +34,7 @@ def get_data(response):
         except:
             cost = "-"
         company = div.find(
-            'a', {'data-qa': 'vacancy-serp__vacancy-employer'}).text
+            'div', {'class': 'vacancy-serp-item__info'}).text
         url = div.find(
             'a', {'data-qa': 'vacancy-serp__vacancy-title'}).get('href')
         discription = div.find('div', {'class': 'g-user-content'}).text.strip()

@@ -3,7 +3,7 @@ Parsing vacancy with hh.ru and writing result to a csv file.
 ![How it works](https://github.com/strpc/parse-vacancy-from-hh_ru/raw/develop/image/screen.gif)
 
 ## Discription
-A parser that collects job data from the hh.ru site into a csv file. The final table contains data with the name of the vacancy, description, salary, company name. 
+A parser that collects job data from the hh.ru site into a csv file. The final table contains data with the name of the vacancy, description, salary, company name(1973 vacansy in 63 sec). 
 
 ## Install
 ```sh
