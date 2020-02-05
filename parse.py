@@ -58,7 +58,8 @@ def get_vacancy(name):
     url = 'https://hh.ru/search/vacancy'
     soup = BS(get_response(url, name), 'lxml')
     pages = soup.find_all(
-        'span', {'class': 'pager-item-not-in-short-range'})[-1].find('a').get('data-page')
+        'span', {'class': 'pager-item-not-in-short-range'})[-1].
+                                        find('a').get('data-page')
     for page in range(1, int(pages)+1):
         get_data(get_response(url, name, page))
         print('Data saved from %s pages' % page)
