@@ -1,74 +1,95 @@
-import requests
+import aiohttp
 from bs4 import BeautifulSoup as BS
 
+import asyncio
 import csv
-from datetime import datetime
-import time
 import sys
+from time import time
 
 
-def get_response(url, name=None, page=None):
-    header = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) \
-                AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 \
-                                            Safari/537.36', 'accept': '*/*'
-    }
-    params = {
-        'L_is_autosearch': 'false', 'area': 1, 'clusters': 'true',
-        'enable_snippets': 'true', 'text': name, 'page': page
-    }
-    r = requests.get(url, headers=header, params=params)
-    return r.text
+async def get_response(url, session, name=None, page=None):
+    if page != None:
+        params['page'] = page
+    async with session.get(url, params=params, headers=headers) as response:
+        data = await response.text()
+        if page == None:
+            return data
+        get_data(data)
 
 
 def get_data(response):
     soup = BS(response, 'lxml')
     data = []
-    divs = soup.find_all('div', {'data-qa': 'vacancy-serp__vacancy', 
+    divs = soup.find_all('div', {'data-qa': 'vacancy-serp__vacancy',
                                  'class': 'vacancy-serp-item'})
     for div in divs:
         title = div.find('a', {'data-qa': 'vacancy-serp__vacancy-title'}).text
         try:
             cost = div.find(
-                'div', {'data-qa': 'vacancy-serp__vacancy-compensation'}).text
+                # data-qa="vacancy-serp__vacancy-compensation"
+                'span', {'data-qa': 'vacancy-serp__vacancy-compensation'}).text
         except:
             cost = "-"
         company = div.find(
             'div', {'class': 'vacancy-serp-item__info'}).text
         url = div.find(
             'a', {'data-qa': 'vacancy-serp__vacancy-title'}).get('href')
-        discription = div.find('div', {'class': 'g-user-content'}).text.strip()
-        write_data({'title': title.strip(),
+        discription = div.find('div', {'class': 'g-user-content'}).text
+        date = div.find(
+            'span', {'class': 'vacancy-serp-item__publication-date'}).text
+        write_data({'date': date.strip(),
+                    'title': title.strip(),
                     'cost': cost,
                     'company': company,
                     'url': url,
-                    'discription': discription})
+                    'discription': discription.strip()})
 
 
 def write_data(data):
+    global count
     with open('data_from_hh.csv', 'a') as file:
-        order = ['title', 'cost', 'company', 'url', 'discription']
+        order = ['date', 'title', 'cost', 'company', 'url', 'discription']
         writer = csv.DictWriter(
-            file, fieldnames=order, delimiter=';', 
-                    quoting=csv.QUOTE_NONNUMERIC)
+            file, fieldnames=order, delimiter=';',
+            quoting=csv.QUOTE_NONNUMERIC)
         writer.writerow(data)
+    count += 1
 
 
-def get_vacancy(name):
+async def get_vacancy(name):
     url = 'https://hh.ru/search/vacancy'
-    soup = BS(get_response(url, name), 'lxml')
+    params['text'] = name
+
+    async with aiohttp.ClientSession() as session:
+        r = asyncio.create_task(get_response(url, session, name))
+        html = await asyncio.gather(r)
+    soup = BS(html[0].strip(), 'lxml')
     pages = soup.find_all(
-        'span', {'class': 'pager-item-not-in-short-range'})[-1].find('a'
-                                                        ).get('data-page')
-    for page in range(1, int(pages)+1):
-        get_data(get_response(url, name, page))
-        print('Data saved from %s pages' % page)
-    print('Done. View file "data_from_hh.csv"')
+        'span', {'class': 'pager-item-not-in-short-range'})[-1].find('a').get(
+        'data-page')
+    tasks = []
+
+    async with aiohttp.ClientSession() as session:
+        for page in range(1, int(pages)+1):
+            task = asyncio.create_task(get_response(url, session, name, page))
+            tasks.append(task)
+        await asyncio.gather(*tasks)
+    print(f'Done. {count} vacancy with title "{name}" saved.\n'
+          'View file "data_from_hh.csv"')
 
 
 if __name__ == '__main__':
-    start_time = datetime.now()
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 \
+                                        Safari/537.36', 'accept': '*/*'
+               }
+    params = {
+        'L_is_autosearch': 'false', 'area': 1, 'clusters': 'true',
+        'enable_snippets': 'true'
+    }
     name = ''
+    count = 0
+
     if len(sys.argv) > 1:
         print('We are looking for vacancy with the name:', end=" ")
         for i in sys.argv[1:]:
@@ -78,9 +99,9 @@ if __name__ == '__main__':
                 break
             name += i + " "
             print(i, end=" ")
-        get_vacancy(name)
     else:
         name = input('Enter vacancy title: ')
-        get_vacancy(name)
-    print("Passed " + str(datetime.now() - start_time))
-    
+    print('Please, wait')
+    start_time = time()
+    asyncio.run(get_vacancy(name))
+    print(f"Passed {round(time() - start_time, 2)} sec")
